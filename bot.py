@@ -348,9 +348,10 @@ class TelegramClient:
 
 async def _playwright_login(page, login_url: str, username: str, password: str) -> None:
     await page.goto(login_url, wait_until="domcontentloaded", timeout=60000)
-    # Give the Vue SPA extra time to render the login form
-    await page.wait_for_timeout(3000)
-    await page.wait_for_load_state("networkidle", timeout=60000)
+    # Give the Vue SPA time to render — skip networkidle (SPAs keep the network busy)
+    await page.wait_for_timeout(5000)
+
+    print(f"[auth] page url after load: {page.url}")
 
     if not await page.locator('input[type="password"]').count() and "login" not in page.url.lower():
         return  # already logged in
@@ -359,36 +360,60 @@ async def _playwright_login(page, login_url: str, username: str, password: str) 
         raise RuntimeError("Login required but credentials not provided")
 
     print("[auth] logging in...")
+
+    # Find and fill username field
+    filled_user = False
     for sel in [
         'input[placeholder*="email or login" i]',
         'input[name="username"]', 'input[name="email"]',
         'input[type="email"]', 'input[type="text"]',
     ]:
         if await page.locator(sel).count() > 0:
-            await page.fill(sel, username)
+            await page.locator(sel).first.fill(username)
+            print(f"[auth] filled username via {sel}")
+            filled_user = True
             break
 
-    # Wait explicitly for password field — Vue SPA may render it after username
-    try:
-        await page.wait_for_selector('input[type="password"]', state="visible", timeout=30000)
-    except Exception:
-        pass
-    await page.fill('input[type="password"]', password, timeout=30000)
+    await page.wait_for_timeout(1500)
+
+    # Find password field — try progressively, log what's on page if not found
+    pw_filled = False
+    for pw_sel in [
+        'input[type="password"]',
+        'input[autocomplete="current-password"]',
+        'input[name="password"]',
+    ]:
+        try:
+            await page.wait_for_selector(pw_sel, timeout=20000)
+            await page.locator(pw_sel).first.fill(password)
+            print(f"[auth] filled password via {pw_sel}")
+            pw_filled = True
+            break
+        except Exception:
+            continue
+
+    if not pw_filled:
+        # Dump all inputs on the page so we can diagnose
+        inputs = await page.evaluate(
+            "() => Array.from(document.querySelectorAll('input')).map(e => ({type: e.type, name: e.name, id: e.id, placeholder: e.placeholder, visible: e.offsetParent !== null}))"
+        )
+        print(f"[auth] password field not found. Inputs on page: {inputs}")
+        raise RuntimeError("Could not find password field on login page")
 
     for sel in [
         'button.btn-sign-in', 'button:has-text("SIGN IN")',
         'button[type="submit"]', 'button:has-text("Login")',
     ]:
         if await page.locator(sel).count() > 0:
-            await page.click(sel)
+            await page.locator(sel).first.click()
+            print(f"[auth] clicked submit via {sel}")
             break
 
-    await page.wait_for_load_state("networkidle", timeout=30000)
-    await page.wait_for_timeout(2500)
+    await page.wait_for_timeout(5000)
 
     if await page.locator('input[type="password"]').count() or "login" in page.url.lower():
         raise RuntimeError("Login failed — check credentials")
-    print("[auth] logged in")
+    print("[auth] logged in successfully")
 
 
 async def _verify_volp_credentials(username: str, password: str, config: dict) -> bool:
