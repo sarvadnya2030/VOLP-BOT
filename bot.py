@@ -347,8 +347,10 @@ class TelegramClient:
 
 
 async def _playwright_login(page, login_url: str, username: str, password: str) -> None:
-    await page.goto(login_url, wait_until="domcontentloaded", timeout=30000)
-    await page.wait_for_load_state("networkidle", timeout=30000)
+    await page.goto(login_url, wait_until="domcontentloaded", timeout=60000)
+    # Give the Vue SPA extra time to render the login form
+    await page.wait_for_timeout(3000)
+    await page.wait_for_load_state("networkidle", timeout=60000)
 
     if not await page.locator('input[type="password"]').count() and "login" not in page.url.lower():
         return  # already logged in
@@ -366,7 +368,12 @@ async def _playwright_login(page, login_url: str, username: str, password: str) 
             await page.fill(sel, username)
             break
 
-    await page.fill('input[type="password"]', password)
+    # Wait explicitly for password field — Vue SPA may render it after username
+    try:
+        await page.wait_for_selector('input[type="password"]', state="visible", timeout=30000)
+    except Exception:
+        pass
+    await page.fill('input[type="password"]', password, timeout=30000)
 
     for sel in [
         'button.btn-sign-in', 'button:has-text("SIGN IN")',
