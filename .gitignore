@@ -1,0 +1,18 @@
+# Environment — NEVER commit real credentials
+.env
+
+# Database — contains user passwords
+state.db
+*.db
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# Temp files
+*.tmp
+*.docx

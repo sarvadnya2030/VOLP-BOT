@@ -1,0 +1,16 @@
+version: "3.9"
+
+services:
+  bot:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - HEADLESS=true
+      - STATE_DB_PATH=/data/state.db
+    volumes:
+      - bot-data:/data
+
+volumes:
+  bot-data:
