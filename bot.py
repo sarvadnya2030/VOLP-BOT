@@ -1104,7 +1104,7 @@ async def _handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
 
 async def _handle_password(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Verify credentials, register user, notify admin."""
+    """Store credentials, register as pending, notify admin."""
     password = update.message.text.strip()
     chat_id = str(update.effective_user.id)
     username = context.user_data.get("volp_username", "")
@@ -1117,24 +1117,7 @@ async def _handle_password(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     except Exception:
         pass
 
-    verifying_msg = await update.effective_chat.send_message("⏳ Verifying your VOLP credentials…")
-
-    try:
-        valid = await _verify_volp_credentials(username, password, config)
-    except Exception as exc:
-        await verifying_msg.edit_text(f"❌ Verification error: {exc}\n\nSend /start to try again.")
-        context.user_data.clear()
-        return ConversationHandler.END
-
-    if not valid:
-        await verifying_msg.edit_text(
-            "❌ Login failed — please check your VOLP email and password.\n\n"
-            "Send /start to try again."
-        )
-        context.user_data.clear()
-        return ConversationHandler.END
-
-    # Register as pending
+    # Register as pending — no credential pre-check needed, admin approval is the gate
     state.register_user(chat_id, username, password, status="pending")
 
     # Notify admin
@@ -1159,8 +1142,8 @@ async def _handle_password(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     except Exception as exc:
         print(f"[registration] failed to notify admin {admin_chat_id}: {exc}")
 
-    await verifying_msg.edit_text(
-        "✅ Credentials verified! Your request has been sent to the admin.\n"
+    await update.effective_chat.send_message(
+        "✅ Request sent to admin for approval.\n"
         "You'll receive a message once you're approved."
     )
     context.user_data.clear()
