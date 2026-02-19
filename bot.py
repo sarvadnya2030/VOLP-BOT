@@ -17,6 +17,7 @@ from urllib.parse import quote
 import requests
 from dotenv import load_dotenv
 from playwright.async_api import async_playwright
+from playwright_stealth import stealth_async
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
     ApplicationBuilder,
@@ -437,6 +438,7 @@ async def _verify_volp_credentials(username: str, password: str, config: dict) -
         browser = await p.chromium.launch(headless=config.get("headless", True))
         ctx = await browser.new_context()
         page = await ctx.new_page()
+        await stealth_async(page)
         try:
             await _playwright_login(page, config["login_url"], username, password)
             return True
@@ -478,6 +480,7 @@ class VolpScanner:
             ctx = await browser.new_context()
             await ctx.route("**/*", _route_filter)
             page = await ctx.new_page()
+            await stealth_async(page)
 
             await _playwright_login(page, self.login_url, self.username, self.password)
             await page.goto(self.start_url, wait_until="networkidle", timeout=30000)
@@ -689,6 +692,7 @@ class VolpSubmitter:
             browser = await p.chromium.launch(headless=self.headless)
             ctx = await browser.new_context()
             page = await ctx.new_page()
+            await stealth_async(page)
             try:
                 await _playwright_login(page, self.login_url, self.username, self.password)
 
