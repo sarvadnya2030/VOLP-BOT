@@ -400,6 +400,7 @@ async def _playwright_login(page, login_url: str, username: str, password: str) 
         print(f"[auth] password field not found. Inputs on page: {inputs}")
         raise RuntimeError("Could not find password field on login page")
 
+    clicked = False
     for sel in [
         'button.btn-sign-in', 'button:has-text("SIGN IN")',
         'button[type="submit"]', 'button:has-text("Login")',
@@ -407,9 +408,23 @@ async def _playwright_login(page, login_url: str, username: str, password: str) 
         if await page.locator(sel).count() > 0:
             await page.locator(sel).first.click()
             print(f"[auth] clicked submit via {sel}")
+            clicked = True
             break
 
-    await page.wait_for_timeout(5000)
+    if not clicked:
+        print("[auth] WARNING: no submit button found — pressing Enter instead")
+        await page.keyboard.press("Enter")
+
+    # Wait for the SPA to navigate away from the login page
+    try:
+        await page.wait_for_url(
+            lambda url: "login" not in url.lower(), timeout=20000
+        )
+    except Exception:
+        pass
+
+    await page.wait_for_timeout(3000)
+    print(f"[auth] post-login url: {page.url}")
 
     if await page.locator('input[type="password"]').count() or "login" in page.url.lower():
         raise RuntimeError("Login failed — check credentials")
